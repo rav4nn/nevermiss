@@ -1,0 +1,9 @@
+{
+  "name": "@nevermiss/shared-types",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "types": "./index.ts"
+}

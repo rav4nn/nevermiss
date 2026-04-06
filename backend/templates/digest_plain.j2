@@ -1,0 +1,22 @@
+NeverMiss Weekly Digest
+
+Critical
+{% for item in critical_items %}
+- {{ item.name }} — {{ item.expiry_date }}
+{% else %}
+- Nothing critical this week.
+{% endfor %}
+
+Urgent
+{% for item in urgent_items %}
+- {{ item.name }} — {{ item.expiry_date }}
+{% else %}
+- No urgent items.
+{% endfor %}
+
+Soon
+{% for item in soon_items %}
+- {{ item.name }} — {{ item.expiry_date }}
+{% else %}
+- Nothing coming up soon.
+{% endfor %}

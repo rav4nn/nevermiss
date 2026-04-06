@@ -1,0 +1,23 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder ruff
+        run: echo "backend ruff placeholder"
+      - name: Placeholder mypy
+        run: echo "backend mypy placeholder"
+      - name: Placeholder pytest
+        run: echo "backend pytest placeholder"

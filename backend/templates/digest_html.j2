@@ -1,0 +1,29 @@
+<html>
+  <body>
+    <h1>NeverMiss Weekly Digest</h1>
+    <h2>Critical</h2>
+    <ul>
+      {% for item in critical_items %}
+      <li>{{ item.name }} — {{ item.expiry_date }}</li>
+      {% else %}
+      <li>Nothing critical this week.</li>
+      {% endfor %}
+    </ul>
+    <h2>Urgent</h2>
+    <ul>
+      {% for item in urgent_items %}
+      <li>{{ item.name }} — {{ item.expiry_date }}</li>
+      {% else %}
+      <li>No urgent items.</li>
+      {% endfor %}
+    </ul>
+    <h2>Soon</h2>
+    <ul>
+      {% for item in soon_items %}
+      <li>{{ item.name }} — {{ item.expiry_date }}</li>
+      {% else %}
+      <li>Nothing coming up soon.</li>
+      {% endfor %}
+    </ul>
+  </body>
+</html>
