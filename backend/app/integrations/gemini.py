@@ -58,7 +58,7 @@ def _build_prompt(email_body: str, sender: str, sent_at: datetime) -> str:
 def _generate_content(api_key: str, prompt: str) -> str:
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
         config=types.GenerateContentConfig(
             temperature=0.1,

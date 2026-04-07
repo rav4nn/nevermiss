@@ -77,7 +77,7 @@ def _validate_gemini_api_key(api_key: str) -> None:
 
         client = genai.Client(api_key=api_key)
         client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents="test",
             config=types.GenerateContentConfig(max_output_tokens=1),
         )
