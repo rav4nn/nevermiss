@@ -25,17 +25,14 @@ class Settings(BaseSettings):
     dodo_product_yearly: str = Field(default="dodo_product_yearly_placeholder", alias="DODO_PRODUCT_YEARLY")
     resend_api_key: str = Field(default="your-resend-api-key", alias="RESEND_API_KEY")
     sentry_dsn: str = Field(default="your-sentry-dsn", alias="SENTRY_DSN")
-    cors_origins: list[str] = Field(
-        default_factory=lambda: ["https://nevermiss.my", "http://localhost:3000"],
+    cors_origins_str: str = Field(
+        default="https://nevermiss.my,https://www.nevermiss.my,http://localhost:3000",
         alias="CORS_ORIGINS",
     )
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins_str.split(",") if o.strip()]
 
 
 @lru_cache(maxsize=1)
