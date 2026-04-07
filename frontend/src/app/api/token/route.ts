@@ -1,17 +1,23 @@
-import { getToken } from "next-auth/jwt";
-import { type NextRequest, NextResponse } from "next/server";
+import { SignJWT } from "jose";
+import { NextResponse } from "next/server";
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
-  const token = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET!,
-    // Must match the custom encode in auth.ts — raw JWT, not encrypted JWE
-    raw: true,
-  });
+import { auth } from "@/lib/auth";
 
-  if (!token) {
+export async function GET(): Promise<NextResponse> {
+  const session = await auth();
+
+  if (!session?.user?.id) {
     return NextResponse.json({ token: null }, { status: 401 });
   }
+
+  const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!);
+  const token = await new SignJWT({
+    sub: session.user.id,
+    tier: (session as { tier?: string }).tier ?? "free",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime("1h")
+    .sign(secret);
 
   return NextResponse.json({ token });
 }
