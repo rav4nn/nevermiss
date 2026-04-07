@@ -226,7 +226,7 @@ async def _run_job(db: AsyncSession, job: ScanJob) -> None:
     await db.execute(
         update(ScanJob).where(ScanJob.id == job.id).values(emails_total=emails_total)
     )
-    await db.flush()
+    await db.commit()  # commit so the UI immediately sees the total
     logger.info("scan_job_message_ids_collected", total=emails_total)
 
     # Process in batches of 50.
@@ -254,7 +254,7 @@ async def _run_job(db: AsyncSession, job: ScanJob) -> None:
             .where(ScanJob.id == job.id)
             .values(emails_processed=emails_processed, items_found=items_found)
         )
-        await db.flush()
+        await db.commit()  # commit after each batch so UI sees live progress
         logger.info(
             "scan_job_batch_done",
             emails_processed=emails_processed,
