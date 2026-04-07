@@ -54,14 +54,14 @@ export default function DashboardPage() {
   );
 
   const meQuery = useMe();
+  const scanStatus = useScanStatus();
+  const startScan = useStartScan();
+  const dismissItem = useDismissItem();
   const itemsQuery = useItems({
     categories: selectedCategories,
     urgency: selectedUrgency,
-    refetchInterval: currentScanJob?.status === "running" ? 5000 : false,
+    refetchInterval: scanStatus.data?.status === "running" ? 5000 : false,
   });
-  const dismissItem = useDismissItem();
-  const scanStatus = useScanStatus();
-  const startScan = useStartScan();
 
   const exportItem = useMutation({
     mutationFn: (itemId: string) =>
