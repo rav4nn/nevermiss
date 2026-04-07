@@ -57,6 +57,7 @@ export default function DashboardPage() {
   const itemsQuery = useItems({
     categories: selectedCategories,
     urgency: selectedUrgency,
+    refetchInterval: currentScanJob?.status === "running" ? 5000 : false,
   });
   const dismissItem = useDismissItem();
   const scanStatus = useScanStatus();
@@ -115,7 +116,8 @@ export default function DashboardPage() {
         ? scanStatus.data.error
         : null;
 
-  const showItems = !currentScanJob && !startScan.isPending;
+  const isScanning = Boolean(currentScanJob) || startScan.isPending;
+  const showItems = true; // always show found items, even while scanning
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(251,146,60,0.18),_transparent_22%),linear-gradient(180deg,_#fffaf2_0%,_#f8fafc_45%,_#eef2ff_100%)] px-6 py-10 md:px-10">
@@ -184,7 +186,9 @@ export default function DashboardPage() {
           <section className="space-y-5">
             <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200 bg-white/80 px-6 py-5 shadow-[0_20px_60px_-42px_rgba(15,23,42,0.35)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm text-slate-500">Active items</p>
+                <p className="text-sm text-slate-500">
+                  {isScanning ? "Items found so far" : "Active items"}
+                </p>
                 <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
                   {itemsQuery.data?.total ?? 0} items need attention
                 </h2>

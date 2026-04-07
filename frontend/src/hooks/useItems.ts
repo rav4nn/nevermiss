@@ -60,6 +60,7 @@ export type UseItemsFilters = {
   dismissed?: boolean;
   categories?: ItemCategory[];
   urgency?: UrgencyTier[];
+  refetchInterval?: number | false;
 };
 
 function buildItemsQuery(filters: UseItemsFilters = {}): string {
@@ -78,9 +79,11 @@ function buildItemsQuery(filters: UseItemsFilters = {}): string {
 }
 
 export function useItems(filters: UseItemsFilters = {}) {
+  const { refetchInterval, ...queryFilters } = filters;
   return useQuery({
-    queryKey: ["items", filters],
-    queryFn: () => apiFetch<ItemsResponse>(buildItemsQuery(filters)),
+    queryKey: ["items", queryFilters],
+    queryFn: () => apiFetch<ItemsResponse>(buildItemsQuery(queryFilters)),
+    refetchInterval: refetchInterval ?? false,
   });
 }
 

@@ -48,7 +48,7 @@ export function useScanStatus() {
       if (!job) {
         return false;
       }
-      return job.status === "queued" || job.status === "running" ? 3000 : false;
+      return job.status === "queued" || job.status === "running" ? 2000 : false;
     },
   });
 }

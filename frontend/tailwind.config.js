@@ -7,7 +7,17 @@ module.exports = {
     "./src/hooks/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      keyframes: {
+        shimmer: {
+          "0%": { transform: "translateX(-200%)" },
+          "100%": { transform: "translateX(400%)" },
+        },
+      },
+      animation: {
+        shimmer: "shimmer 1.4s ease-in-out infinite",
+      },
+    },
   },
   plugins: [require("tailwindcss-animate")],
 };

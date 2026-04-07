@@ -72,11 +72,15 @@ def _validate_digest_day_of_week(day: int) -> int:
 
 def _validate_gemini_api_key(api_key: str) -> None:
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        model.generate_content("test", generation_config={"max_output_tokens": 1})
+        client = genai.Client(api_key=api_key)
+        client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents="test",
+            config=types.GenerateContentConfig(max_output_tokens=1),
+        )
     except Exception as exc:  # noqa: BLE001
         raise AppError(
             ErrorCode.VALIDATION_ERROR,

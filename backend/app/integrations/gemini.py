@@ -4,15 +4,10 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from threading import Lock
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
-
-# genai.configure() sets global state. This lock ensures that concurrent workers
-# using different API keys (BYOK vs shared) do not overwrite each other's key
-# between configure() and generate_content(). Remove when upgrading to per-client API.
-_GENAI_LOCK = Lock()
 
 from app.config import get_settings
 from app.core import crypto
@@ -61,17 +56,16 @@ def _build_prompt(email_body: str, sender: str, sent_at: datetime) -> str:
     reraise=True,
 )
 def _generate_content(api_key: str, prompt: str) -> str:
-    with _GENAI_LOCK:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(
-            "gemini-2.0-flash",
-            generation_config={
-                "temperature": 0.1,
-                "response_mime_type": "application/json",
-            },
-        )
-        response = model.generate_content(prompt)
-    text = getattr(response, "text", None)
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.1,
+            response_mime_type="application/json",
+        ),
+    )
+    text = response.text
     if not isinstance(text, str):
         raise ValueError("Gemini response did not contain text output.")
     return text

@@ -20,7 +20,8 @@ from app.services import signatures
 logger = get_logger("workers.scan_runner")
 
 # Max concurrent Gmail message fetches within a single batch.
-_FETCH_SEMAPHORE = asyncio.Semaphore(10)
+# httplib2 and googleapiclient Resources are NOT thread-safe; run fetches sequentially.
+_FETCH_SEMAPHORE = asyncio.Semaphore(1)
 
 # Max concurrent scan jobs across the whole worker process.
 _JOB_SEMAPHORE = asyncio.Semaphore(3)
