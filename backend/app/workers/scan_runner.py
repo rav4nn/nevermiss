@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import socket
 from datetime import UTC, date, datetime, timedelta
 
@@ -18,6 +19,73 @@ from app.models.user import User
 from app.services import signatures
 
 logger = get_logger("workers.scan_runner")
+
+# ---------------------------------------------------------------------------
+# Pre-filter: cheap keyword + date-pattern check run before Gemini.
+# OR logic: skip only if NEITHER signal is present.
+# ---------------------------------------------------------------------------
+
+_KEYWORDS = re.compile(
+    r"\b("
+    r"renew|renewal|renewing|renews"
+    r"|expir(?:e|es|ed|ing|y|ation)"
+    r"|subscri(?:ption|be|bed|bing)"
+    r"|deadline|due\s*date|due\s*by|by\s*(?:eod|cob)"
+    r"|cancel(?:lation|led|ling)?"
+    r"|payment\s*due|invoice|bill(?:ing)?"
+    r"|premium|policy|insur(?:ance|ed|er)"
+    r"|warrant(?:y|ies)"
+    r"|guarantee"
+    r"|licen[sc]e"
+    r"|registr(?:ation|ered|er)"
+    r"|certif(?:icate|ication|ied)"
+    r"|passport|visa|permit"
+    r"|membership"
+    r"|domain|hosting|ssl\s*cert"
+    r"|voucher|coupon|promo(?:tion)?|offer\s*ends|redeem"
+    r"|last\s*(?:day|chance)"
+    r"|action\s*required|response\s*required|reply\s*by"
+    r"|auto[- ]?renew"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_DATE_PATTERNS = re.compile(
+    r"("
+    # Absolute year references: 2024–2030
+    r"\b20(?:2[4-9]|30)\b"
+    # DD/MM/YYYY or MM/DD/YYYY or DD-MM-YYYY etc.
+    r"|\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b"
+    # YYYY-MM-DD
+    r"|\b\d{4}-\d{2}-\d{2}\b"
+    # Month name + day (+ optional year): "January 15", "15th January 2025"
+    r"|\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?"
+    r"|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+    r"\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,?\s*\d{4})?\b"
+    r"|\b\d{1,2}(?:st|nd|rd|th)?\s+"
+    r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?"
+    r"|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+    r"(?:\s*,?\s*\d{4})?\b"
+    # Relative: "in X days/weeks/months", "within X", "X days left"
+    r"|\bin\s+\d+\s+(?:day|week|month|year)s?\b"
+    r"|\bwithin\s+\d+\s+(?:day|week|month|year)s?\b"
+    r"|\b\d+\s+(?:day|week|month|year)s?\s+(?:left|remaining|away)\b"
+    # Phrases: "next month", "this year", "end of month/year"
+    r"|\b(?:next|this)\s+(?:month|year|week)\b"
+    r"|\bend\s+of\s+(?:month|year|quarter)\b"
+    r"|\bvalid\s+(?:until|through|thru)\b"
+    r"|\beffective\s+(?:from|until|through)\b"
+    r"|\bexpires?\s+(?:on|in|by|soon|shortly)\b"
+    r"|\bdue\s+(?:on|by|in|soon)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _should_skip(body: str) -> bool:
+    """Return True if the email has no keyword AND no date signal → skip Gemini."""
+    return not _KEYWORDS.search(body) and not _DATE_PATTERNS.search(body)
+
 
 # Max concurrent Gmail message fetches within a single batch.
 # httplib2 and googleapiclient Resources are NOT thread-safe; run fetches sequentially.
@@ -81,12 +149,19 @@ async def _process_batch(
     fetch_results = await asyncio.gather(*fetch_tasks)
 
     items_inserted = 0
+    skipped = 0
 
     for message_id, fetch_result in zip(message_ids, fetch_results):
         if fetch_result is None:
             continue
 
         body, sender, sent_at = fetch_result
+
+        # Pre-filter: skip Gemini if email has no keyword AND no date signal.
+        if _should_skip(body):
+            skipped += 1
+            del body
+            continue
 
         # Gemini is synchronous — run in thread pool executor.
         try:
@@ -136,6 +211,8 @@ async def _process_batch(
 
         del extractions
 
+    if skipped:
+        logger.info("scan_batch_prefilter_skipped", skipped=skipped, batch_size=len(message_ids))
     return items_inserted
 
 
