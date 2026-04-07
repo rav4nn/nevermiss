@@ -1,4 +1,5 @@
-import NextAuth, { type DefaultSession, type JWT } from "next-auth";
+import NextAuth, { type DefaultSession } from "next-auth";
+import { type JWT } from "next-auth/jwt";
 import Google from "next-auth/providers/google";
 
 // Extend the built-in session/token types with our custom fields.
