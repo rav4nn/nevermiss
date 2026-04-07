@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.core.errors import AppError, ErrorCode
 from app.core.logging import get_logger
 from app.deps import CurrentUser
-from app.integrations import stripe_client
+from app.integrations import dodo_client
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 logger = get_logger("api.billing")
@@ -31,8 +31,9 @@ async def create_checkout(
     body: CheckoutRequest,
     current_user: CurrentUser,
 ) -> CheckoutResponse:
-    url = stripe_client.create_checkout_session(
+    url = await dodo_client.create_checkout_session(
         user_id=str(current_user.id),
+        user_email=current_user.email,
         plan=body.plan,
     )
     return CheckoutResponse(url=url)
@@ -40,14 +41,14 @@ async def create_checkout(
 
 @router.post("/portal", response_model=PortalResponse)
 async def create_portal(current_user: CurrentUser) -> PortalResponse:
-    if not current_user.stripe_customer_id:
+    if not current_user.dodo_customer_id:
         raise AppError(
             ErrorCode.NOT_FOUND,
             "No billing account found for this user.",
             status_code=404,
         )
 
-    url = stripe_client.create_billing_portal_session(
-        stripe_customer_id=current_user.stripe_customer_id,
+    url = await dodo_client.create_billing_portal_session(
+        dodo_customer_id=current_user.dodo_customer_id,
     )
     return PortalResponse(url=url)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations import stripe_client
+from app.integrations import dodo_client
 
 
 @pytest.mark.asyncio
@@ -22,9 +22,9 @@ async def test_checkout_returns_redirect_url(
 ) -> None:
     user = await user_factory()
     monkeypatch.setattr(
-        stripe_client,
+        dodo_client,
         "create_checkout_session",
-        lambda user_id, plan: f"https://checkout.stripe.test/{plan}/{user_id}",
+        lambda user_id, user_email, plan: f"https://checkout.dodo.test/{plan}/{user_id}",
     )
 
     response = await client.post(
@@ -34,7 +34,7 @@ async def test_checkout_returns_redirect_url(
     )
 
     assert response.status_code == 200
-    assert response.json()["url"].startswith("https://checkout.stripe.test/monthly/")
+    assert response.json()["url"].startswith("https://checkout.dodo.test/monthly/")
 
 
 @pytest.mark.asyncio
@@ -52,8 +52,8 @@ async def test_portal_returns_not_found_without_customer(
 
 
 @pytest.mark.asyncio
-async def test_stripe_webhook_rejects_missing_signature(client) -> None:
-    response = await client.post("/api/webhook/stripe", content=b"{}")
+async def test_dodo_webhook_rejects_missing_headers(client) -> None:
+    response = await client.post("/api/webhook/dodo", content=b"{}")
 
     assert response.status_code == 400
-    assert response.json() == {"error": "Missing stripe-signature header."}
+    assert response.json() == {"error": "Missing webhook headers."}

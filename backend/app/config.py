@@ -19,13 +19,10 @@ class Settings(BaseSettings):
     encryption_key: str = Field(default="your-encryption-key", alias="ENCRYPTION_KEY")
     nextauth_secret: str = Field(default="your-nextauth-secret", alias="NEXTAUTH_SECRET")
     gemini_api_key: str = Field(default="your-gemini-api-key", alias="GEMINI_API_KEY")
-    stripe_secret_key: str = Field(default="your-stripe-secret-key", alias="STRIPE_SECRET_KEY")
-    stripe_webhook_secret: str = Field(
-        default="your-stripe-webhook-secret",
-        alias="STRIPE_WEBHOOK_SECRET",
-    )
-    price_monthly: str = Field(default="price_monthly_placeholder", alias="PRICE_MONTHLY")
-    price_yearly: str = Field(default="price_yearly_placeholder", alias="PRICE_YEARLY")
+    dodo_api_key: str = Field(default="your-dodo-api-key", alias="DODO_API_KEY")
+    dodo_webhook_secret: str = Field(default="your-dodo-webhook-secret", alias="DODO_WEBHOOK_SECRET")
+    dodo_product_monthly: str = Field(default="dodo_product_monthly_placeholder", alias="DODO_PRODUCT_MONTHLY")
+    dodo_product_yearly: str = Field(default="dodo_product_yearly_placeholder", alias="DODO_PRODUCT_YEARLY")
     resend_api_key: str = Field(default="your-resend-api-key", alias="RESEND_API_KEY")
     sentry_dsn: str = Field(default="your-sentry-dsn", alias="SENTRY_DSN")
     cors_origins: list[str] = Field(

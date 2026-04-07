@@ -163,8 +163,8 @@ async def user_factory(integration_sessionmaker):
         tier: UserTier = UserTier.FREE,
         refresh_token_enc: str | None = None,
         access_token_enc: str | None = None,
-        stripe_customer_id: str | None = None,
-        stripe_subscription_id: str | None = None,
+        dodo_customer_id: str | None = None,
+        dodo_subscription_id: str | None = None,
         timezone: str = "UTC",
         deleted_at: datetime | None = None,
     ) -> User:
@@ -187,8 +187,8 @@ async def user_factory(integration_sessionmaker):
                 access_token_expires_at=datetime.now(UTC) + timedelta(hours=1),
                 timezone=timezone,
                 tier=tier,
-                stripe_customer_id=stripe_customer_id,
-                stripe_subscription_id=stripe_subscription_id,
+                dodo_customer_id=dodo_customer_id,
+                dodo_subscription_id=dodo_subscription_id,
                 deleted_at=deleted_at,
             )
             session.add(user)

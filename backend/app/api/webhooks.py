@@ -3,57 +3,57 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-import stripe
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import UserTier, get_db
 from app.core.errors import AppError
 from app.core.logging import get_logger
-from app.integrations import stripe_client
+from app.integrations import dodo_client
 from app.models.user import User
 
 router = APIRouter(prefix="/api/webhook", tags=["webhooks"])
 logger = get_logger("api.webhooks")
 
 
-async def _get_db_session() -> AsyncSession:
-    async for session in get_db():
-        return session
-    raise RuntimeError("Could not obtain DB session")  # pragma: no cover
-
-
-@router.post("/stripe")
-async def stripe_webhook(
+@router.post("/dodo")
+async def dodo_webhook(
     request: Request,
-    stripe_signature: Annotated[str | None, Header(alias="stripe-signature")] = None,
+    webhook_id: Annotated[str | None, Header(alias="webhook-id")] = None,
+    webhook_timestamp: Annotated[str | None, Header(alias="webhook-timestamp")] = None,
+    webhook_signature: Annotated[str | None, Header(alias="webhook-signature")] = None,
 ) -> JSONResponse:
     """
-    Receive and verify Stripe webhook events.
+    Receive and verify DodoPayments webhook events.
 
     IMPORTANT: request.body() must be called before any JSON parsing.
-    The raw bytes are required for HMAC signature verification.
+    Raw bytes are required for HMAC signature verification.
     This endpoint is intentionally excluded from JWT auth.
     """
-    if not stripe_signature:
-        logger.warning("stripe_webhook_missing_signature")
-        return JSONResponse(status_code=400, content={"error": "Missing stripe-signature header."})
+    if not webhook_id or not webhook_timestamp or not webhook_signature:
+        logger.warning("dodo_webhook_missing_headers")
+        return JSONResponse(status_code=400, content={"error": "Missing webhook headers."})
 
-    # Read raw bytes — must happen before any JSON decode
     raw_body: bytes = await request.body()
 
     try:
-        event = stripe_client.construct_webhook_event(
+        dodo_client.verify_webhook_signature(
             payload=raw_body,
-            sig_header=stripe_signature,
+            webhook_id=webhook_id,
+            webhook_timestamp=webhook_timestamp,
+            webhook_signature=webhook_signature,
         )
     except AppError as exc:
         return JSONResponse(status_code=exc.status_code, content={"error": exc.message})
 
-    event_type: str = event["type"]
-    logger.info("stripe_webhook_received", event_type=event_type, event_id=event["id"])
+    try:
+        event = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON payload."})
+
+    event_type: str = event.get("type", "")
+    logger.info("dodo_webhook_received", event_type=event_type)
 
     async for db in get_db():
         try:
@@ -61,99 +61,72 @@ async def stripe_webhook(
             await db.commit()
         except Exception as exc:
             await db.rollback()
-            logger.error("stripe_webhook_handler_error", event_type=event_type, error=str(exc))
-            # Return 200 so Stripe does not retry events we received but failed to process.
-            # Failed events should be investigated via Stripe dashboard.
+            logger.error("dodo_webhook_handler_error", event_type=event_type, error=str(exc))
 
     return JSONResponse(status_code=200, content={"received": True})
 
 
-async def _handle_event(db: AsyncSession, event: stripe.Event) -> None:
-    event_type: str = event["type"]
-    data = event["data"]["object"]
+async def _handle_event(db, event: dict) -> None:  # type: ignore[type-arg]
+    event_type: str = event.get("type", "")
+    data: dict = event.get("data", {})  # type: ignore[type-arg]
 
-    if event_type == "checkout.session.completed":
-        await _on_checkout_completed(db, data)
-    elif event_type == "customer.subscription.updated":
-        await _on_subscription_updated(db, data)
-    elif event_type == "customer.subscription.deleted":
-        await _on_subscription_deleted(db, data)
+    if event_type == "subscription.active":
+        await _on_subscription_active(db, data)
+    elif event_type in ("subscription.cancelled", "subscription.expired"):
+        await _on_subscription_ended(db, data)
     else:
-        logger.debug("stripe_webhook_unhandled_event", event_type=event_type)
+        logger.debug("dodo_webhook_unhandled_event", event_type=event_type)
 
 
-async def _on_checkout_completed(db: AsyncSession, session: dict) -> None:  # type: ignore[type-arg]
+async def _on_subscription_active(db, data: dict) -> None:  # type: ignore[type-arg]
     """
-    checkout.session.completed — set tier=pro, store stripe IDs.
-
-    client_reference_id is our internal user UUID, set when creating the session.
+    subscription.active — set tier=pro, store Dodo customer/subscription IDs.
+    metadata.user_id is our internal UUID set when creating the checkout session.
     """
-    client_ref: str | None = session.get("client_reference_id")
-    if not client_ref:
-        logger.warning("checkout_completed_missing_client_reference_id")
+    metadata: dict = data.get("metadata", {})  # type: ignore[type-arg]
+    user_id_str: str | None = metadata.get("user_id")
+    if not user_id_str:
+        logger.warning("dodo_subscription_active_missing_user_id")
         return
 
     try:
-        user_id = uuid.UUID(client_ref)
+        user_id = uuid.UUID(user_id_str)
     except ValueError:
-        logger.warning("checkout_completed_invalid_client_reference_id", ref=client_ref)
+        logger.warning("dodo_subscription_active_invalid_user_id", ref=user_id_str)
         return
 
     result = await db.execute(select(User).where(User.id == user_id))
     user: User | None = result.scalar_one_or_none()
     if not user:
-        logger.warning("checkout_completed_user_not_found", user_id=str(user_id))
+        logger.warning("dodo_subscription_active_user_not_found", user_id=user_id_str)
         return
 
     user.tier = UserTier.PRO
-    user.stripe_customer_id = session.get("customer")
-    user.stripe_subscription_id = session.get("subscription")
+    user.dodo_customer_id = data.get("customer_id")
+    user.dodo_subscription_id = data.get("subscription_id")
 
     logger.info(
         "user_upgraded_to_pro",
-        user_id=str(user_id),
-        subscription_id=user.stripe_subscription_id,
+        user_id=user_id_str,
+        subscription_id=user.dodo_subscription_id,
     )
 
 
-async def _on_subscription_updated(db: AsyncSession, subscription: dict) -> None:  # type: ignore[type-arg]
+async def _on_subscription_ended(db, data: dict) -> None:  # type: ignore[type-arg]
     """
-    customer.subscription.updated — sync subscription ID.
+    subscription.cancelled / subscription.expired — downgrade to free.
     """
-    customer_id: str | None = subscription.get("customer")
-    subscription_id: str | None = subscription.get("id")
+    customer_id: str | None = data.get("customer_id")
     if not customer_id:
         return
 
-    result = await db.execute(
-        select(User).where(User.stripe_customer_id == customer_id)
-    )
+    result = await db.execute(select(User).where(User.dodo_customer_id == customer_id))
     user: User | None = result.scalar_one_or_none()
     if not user:
-        logger.warning("subscription_updated_user_not_found", customer_id=customer_id)
-        return
-
-    user.stripe_subscription_id = subscription_id
-    logger.info("subscription_updated", user_id=str(user.id), subscription_id=subscription_id)
-
-
-async def _on_subscription_deleted(db: AsyncSession, subscription: dict) -> None:  # type: ignore[type-arg]
-    """
-    customer.subscription.deleted — downgrade to free, clear subscription ID.
-    """
-    customer_id: str | None = subscription.get("customer")
-    if not customer_id:
-        return
-
-    result = await db.execute(
-        select(User).where(User.stripe_customer_id == customer_id)
-    )
-    user: User | None = result.scalar_one_or_none()
-    if not user:
-        logger.warning("subscription_deleted_user_not_found", customer_id=customer_id)
+        logger.warning("dodo_subscription_ended_user_not_found", customer_id=customer_id)
         return
 
     user.tier = UserTier.FREE
-    user.stripe_subscription_id = None
+    user.dodo_subscription_id = None
 
     logger.info("user_downgraded_to_free", user_id=str(user.id))

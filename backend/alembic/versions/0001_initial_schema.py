@@ -50,8 +50,8 @@ def upgrade() -> None:
           access_token_expires_at  TIMESTAMPTZ,
           api_key_enc              TEXT,
           tier                     user_tier NOT NULL DEFAULT 'free',
-          stripe_customer_id       TEXT UNIQUE,
-          stripe_subscription_id   TEXT UNIQUE,
+          dodo_customer_id         TEXT UNIQUE,
+          dodo_subscription_id     TEXT UNIQUE,
           timezone                 TEXT NOT NULL DEFAULT 'UTC',
           digest_day_of_week       SMALLINT NOT NULL DEFAULT 1
                                      CHECK (digest_day_of_week BETWEEN 0 AND 6),

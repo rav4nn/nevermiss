@@ -46,8 +46,8 @@ class User(Base):
         server_default=text("'free'"),
         default=UserTier.FREE,
     )
-    stripe_customer_id: Mapped[str | None] = mapped_column(Text, unique=True)
-    stripe_subscription_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    dodo_customer_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    dodo_subscription_id: Mapped[str | None] = mapped_column(Text, unique=True)
     timezone: Mapped[str] = mapped_column(
         Text,
         nullable=False,
