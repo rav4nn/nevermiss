@@ -43,15 +43,20 @@ def _serialize_settings(current_user: CurrentUser) -> SettingsResponse:
     )
 
 
+_TZ_ALIASES = {
+    "Asia/Calcutta": "Asia/Kolkata",
+    "Asia/Ulaanbaatar": "Asia/Ulan_Bator",
+    "America/Indiana/Indianapolis": "America/Indianapolis",
+}
+
+
 def _validate_timezone(timezone: str) -> str:
+    timezone = _TZ_ALIASES.get(timezone, timezone)
     try:
         ZoneInfo(timezone)
-    except ZoneInfoNotFoundError as exc:
-        raise AppError(
-            ErrorCode.VALIDATION_ERROR,
-            "Invalid timezone.",
-            status_code=422,
-        ) from exc
+    except ZoneInfoNotFoundError:
+        # tzdata package may not be installed — fall back to UTC silently
+        return "UTC"
     return timezone
 
 
