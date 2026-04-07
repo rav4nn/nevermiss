@@ -1,6 +1,5 @@
 "use client";
 
-import { signOut } from "next-auth/react";
 
 export type ApiErrorPayload = {
   error: {
@@ -121,7 +120,6 @@ export async function apiFetch<T>(
     const error = await parseError(response);
     if (response.status === 401) {
       cachedToken = null;
-      await signOut({ callbackUrl: "/login" });
     }
     throw error;
   }
