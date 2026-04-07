@@ -128,9 +128,11 @@ def build_gmail_service(
     )
 
     if expires_at is not None:
-        credentials.expiry = expires_at if expires_at.tzinfo is not None else expires_at.replace(
-            tzinfo=UTC
-        )
+        # Google's auth library compares credentials.expiry using offset-naive datetime.
+        # Always strip tzinfo before assigning to avoid "can't compare offset-naive
+        # and offset-aware datetimes" errors inside the Google SDK.
+        aware = expires_at if expires_at.tzinfo is not None else expires_at.replace(tzinfo=UTC)
+        credentials.expiry = aware.replace(tzinfo=None)
 
     if not credentials.token or credentials.expired:
         try:
