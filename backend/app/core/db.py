@@ -62,16 +62,21 @@ class ScanKind(StrEnum):
     MANUAL = "manual"
 
 
-USER_TIER_ENUM = SqlEnum(UserTier, name="user_tier", create_type=False)
-ITEM_CATEGORY_ENUM = SqlEnum(ItemCategory, name="item_category", create_type=False)
-DATE_TYPE_ENUM = SqlEnum(DateType, name="date_type", create_type=False)
+def _values(enum):  # type: ignore[type-arg]
+    return [e.value for e in enum]
+
+
+USER_TIER_ENUM = SqlEnum(UserTier, name="user_tier", create_type=False, values_callable=_values)
+ITEM_CATEGORY_ENUM = SqlEnum(ItemCategory, name="item_category", create_type=False, values_callable=_values)
+DATE_TYPE_ENUM = SqlEnum(DateType, name="date_type", create_type=False, values_callable=_values)
 CONFIDENCE_LEVEL_ENUM = SqlEnum(
     ConfidenceLevel,
     name="confidence_level",
     create_type=False,
+    values_callable=_values,
 )
-SCAN_STATUS_ENUM = SqlEnum(ScanStatus, name="scan_status", create_type=False)
-SCAN_KIND_ENUM = SqlEnum(ScanKind, name="scan_kind", create_type=False)
+SCAN_STATUS_ENUM = SqlEnum(ScanStatus, name="scan_status", create_type=False, values_callable=_values)
+SCAN_KIND_ENUM = SqlEnum(ScanKind, name="scan_kind", create_type=False, values_callable=_values)
 
 settings = get_settings()
 engine = create_async_engine(settings.database_url, future=True)
