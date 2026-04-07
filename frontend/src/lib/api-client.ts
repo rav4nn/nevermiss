@@ -30,13 +30,6 @@ type ApiFetchOptions = Omit<RequestInit, "body"> & {
   body?: BodyInit | JsonBody | null;
 };
 
-const AUTH_COOKIE_NAMES = [
-  "__Secure-authjs.session-token",
-  "authjs.session-token",
-  "__Secure-next-auth.session-token",
-  "next-auth.session-token",
-];
-
 function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? "";
 }
@@ -71,6 +64,27 @@ async function parseError(response: Response): Promise<ApiError> {
   return new ApiError(payload, response.status);
 }
 
+let cachedToken: string | null = null;
+let tokenFetchedAt = 0;
+
+async function getAuthToken(): Promise<string | null> {
+  // Cache the token for 30 seconds to avoid hammering /api/token
+  if (cachedToken && Date.now() - tokenFetchedAt < 30_000) {
+    return cachedToken;
+  }
+
+  try {
+    const res = await fetch("/api/token");
+    if (!res.ok) return null;
+    const data = (await res.json()) as { token: string | null };
+    cachedToken = data.token;
+    tokenFetchedAt = Date.now();
+    return cachedToken;
+  } catch {
+    return null;
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   options: ApiFetchOptions = {},
@@ -92,9 +106,9 @@ export async function apiFetch<T>(
     body = JSON.stringify(body);
   }
 
-  const authToken = getSessionJwtFromCookie();
-  if (authToken) {
-    headers.set("Authorization", `Bearer ${authToken}`);
+  const token = await getAuthToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
@@ -106,6 +120,7 @@ export async function apiFetch<T>(
   if (!response.ok) {
     const error = await parseError(response);
     if (response.status === 401) {
+      cachedToken = null;
       await signOut({ callbackUrl: "/login" });
     }
     throw error;
@@ -116,20 +131,4 @@ export async function apiFetch<T>(
   }
 
   return (await response.json()) as T;
-}
-
-function getSessionJwtFromCookie(): string | null {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  const cookies = document.cookie.split(";").map((value) => value.trim());
-  for (const cookieName of AUTH_COOKIE_NAMES) {
-    const match = cookies.find((cookie) => cookie.startsWith(`${cookieName}=`));
-    if (match) {
-      return decodeURIComponent(match.slice(cookieName.length + 1));
-    }
-  }
-
-  return null;
 }
