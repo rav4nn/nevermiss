@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import socket
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -140,6 +142,7 @@ async def _process_batch(
     user: User,
     service: object,
     message_ids: list[str],
+    filter_log: "FilterLog | None" = None,
 ) -> int:
     """
     Fetch bodies and run extraction for one batch of message IDs.
@@ -160,6 +163,14 @@ async def _process_batch(
         # Pre-filter: skip Gemini if email has no keyword AND no date signal.
         if _should_skip(body):
             skipped += 1
+            if filter_log:
+                filter_log.write({
+                    "decision": "skipped",
+                    "message_id": message_id,
+                    "sender": sender,
+                    "sent_at": sent_at.isoformat(),
+                    "body_snippet": body[:300],
+                })
             del body
             continue
 
@@ -176,6 +187,15 @@ async def _process_batch(
             )
             extractions = []
         finally:
+            if filter_log:
+                filter_log.write({
+                    "decision": "sent_to_gemini",
+                    "message_id": message_id,
+                    "sender": sender,
+                    "sent_at": sent_at.isoformat(),
+                    "body_snippet": body[:300],
+                    "items_found": len(extractions),
+                })
             # Spec rule 3: email body must not persist beyond this point.
             del body
 
@@ -214,6 +234,22 @@ async def _process_batch(
     if skipped:
         logger.info("scan_batch_prefilter_skipped", skipped=skipped, batch_size=len(message_ids))
     return items_inserted
+
+
+class FilterLog:
+    """Writes per-email filter decisions to a JSON lines file for offline analysis."""
+
+    def __init__(self, job_id: str, user_id: str) -> None:
+        self._path = Path(f"/tmp/filter_log_{job_id}_{user_id[:8]}.jsonl")
+        self._fh = self._path.open("w", encoding="utf-8")
+
+    def write(self, record: dict) -> None:
+        self._fh.write(json.dumps(record, default=str) + "\n")
+        self._fh.flush()
+
+    def close(self) -> None:
+        self._fh.close()
+        logger.info("filter_log_written", path=str(self._path))
 
 
 async def _handle_reauth(db: AsyncSession, user: User, job: ScanJob) -> None:
@@ -309,12 +345,13 @@ async def _run_job(db: AsyncSession, job: ScanJob) -> None:
     # Process in batches of 50.
     emails_processed = 0
     items_found = 0
+    filter_log = FilterLog(str(job.id), str(job.user_id))
 
     for batch_start in range(0, emails_total, 50):
         batch = message_ids[batch_start : batch_start + 50]
 
         try:
-            inserted = await _process_batch(db, user, service, batch)
+            inserted = await _process_batch(db, user, service, batch, filter_log)
         except GmailReauthRequired:
             await _handle_reauth(db, user, job)
             return
@@ -338,6 +375,8 @@ async def _run_job(db: AsyncSession, job: ScanJob) -> None:
             emails_total=emails_total,
             items_found=items_found,
         )
+
+    filter_log.close()
 
     # Mark complete and update last_scan_at.
     now = datetime.now(UTC)
